@@ -7,6 +7,8 @@
 (function(){
   "use strict";
 
+  const VERSION = "0.1.1";   // single source of truth — bump on release, keep in sync with the git tag
+
   const STOCK = { cin:0.047, drive:250, cg:0.047, diode:"si", tone:50, vol:70,
                   freq:220, amp:55, wf:"guitar" };
 
@@ -63,5 +65,5 @@
 
   function compute(P, N, dt, t0){ return processChain(P, genSource(P,N,dt,t0||0), dt); }
 
-  window.TSDSP = { STOCK, NODES, NODE_LABEL, diodeVf, softclip, softclipAsym, wave, genSource, processChain, compute };
+  window.TSDSP = { VERSION, STOCK, NODES, NODE_LABEL, diodeVf, softclip, softclipAsym, wave, genSource, processChain, compute };
 })();

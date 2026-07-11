@@ -8,6 +8,13 @@ While the project is pre-1.0, minor version bumps may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-11
+
+### Added
+- MIT `LICENSE`.
+- In-app version badge shown in the app and oscilloscope headers, sourced from a
+  single `TSDSP.VERSION` constant in `dsp.js` (bump it together with the git tag).
+
 ## [0.1.0] - 2026-07-11
 
 First tagged prototype: an interactive learning tool for guitar overdrive pedals,
@@ -38,5 +45,6 @@ starting with the TS808 Tube Screamer.
   absolute time so the scope can trigger cleanly.
 - **Tooling**: `README.md` and a double-clickable `run.command` local launcher.
 
-[Unreleased]: https://github.com/BarryElderwine/pedal-platform/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/BarryElderwine/pedal-platform/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/BarryElderwine/pedal-platform/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BarryElderwine/pedal-platform/releases/tag/v0.1.0

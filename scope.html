@@ -21,6 +21,8 @@
   .badge{width:30px;height:30px;border-radius:7px;background:linear-gradient(160deg,#38ff9e,#1c9c62);
     display:grid;place-items:center;font-weight:800;color:#04140b;font-size:13px}
   h1{font-size:15px;margin:0;font-weight:700}
+  .ver{font:600 10px var(--mono);color:var(--faint);background:var(--panel2);border:1px solid var(--edge);
+    border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle}
   .sub{color:var(--dim);font-size:11px;margin-top:1px}
   header .grow{flex:1}
   .link{font:11px var(--mono);color:var(--dim);background:var(--panel2);border:1px solid var(--edge);
@@ -89,7 +91,7 @@
   <header>
     <div class="badge">◠</div>
     <div>
-      <h1>Oscilloscope <span style="color:var(--dim);font-weight:400">— Learning Mode</span></h1>
+      <h1>Oscilloscope <span style="color:var(--dim);font-weight:400">— Learning Mode</span> <span class="ver" id="appver"></span></h1>
       <div class="sub">A benchtop scope for probing the pedal · trigger, timebase &amp; measure</div>
     </div>
     <div class="grow"></div>
@@ -482,6 +484,7 @@ function buildLessons(){
 }
 
 /* ============================ BOOT ===================================== */
+document.getElementById("appver").textContent="v"+TSDSP.VERSION;
 initControls(); buildLessons(); reflectLink(); fit();
 requestAnimationFrame(draw);
 </script>
