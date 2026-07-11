@@ -3,6 +3,10 @@
 An interactive way to learn a guitar overdrive pedal (TS808 "Tube Screamer") by
 probing a real schematic and watching the signal on a simulated oscilloscope.
 
+This is the first pedal in a planned catalog of standard analog pedal architectures —
+see **[ROADMAP.md](ROADMAP.md)** for where it's headed (more pedals, audio, and a
+"design → build" package: schematic, board layout, parts list, and build instructions).
+
 ## How to run
 
 **Option A — just open it (offline, no setup)**

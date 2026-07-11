@@ -8,6 +8,12 @@ While the project is pre-1.0, minor version bumps may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+- `ROADMAP.md` — the catalog vision (analog pedal architectures organized by engine
+  core), the pedal-as-data architecture, the Pedal Build Package plan (schematic export,
+  board layout, BOM, build instructions), phased milestones, and the Tube Screamer
+  refinement backlog.
+
 ## [0.1.1] - 2026-07-11
 
 ### Added
