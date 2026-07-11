@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tube Screamer Explorer</title>
+<style>
+  :root{
+    --bg:#0e1113; --panel:#171b1e; --panel2:#1e2429; --edge:#2b333a;
+    --ink:#e7edf1; --dim:#8fa0ab; --faint:#5c6b76;
+    --ts:#3fae4a; --ts2:#2c8a35; --accent:#ffcf3f; --hot:#ff5a52; --cool:#4cc2ff;
+    --wire:#61707b; --symbol:#cdd8df;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;overflow:hidden}
+  .app{display:grid;grid-template-rows:auto 1fr;height:100vh;gap:10px;padding:10px}
+  header{display:flex;align-items:center;gap:14px}
+  .badge{width:34px;height:34px;border-radius:8px;background:linear-gradient(160deg,var(--ts),var(--ts2));
+    display:grid;place-items:center;font-weight:800;color:#0c1a0e;box-shadow:0 2px 10px rgba(63,174,74,.35)}
+  h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px}
+  .sub{color:var(--dim);font-size:12px;margin-top:1px}
+  header .grow{flex:1}
+  .pedal-select{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px}
+  select,button,input{font-family:var(--sans)}
+  .btn{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;
+    padding:6px 11px;cursor:pointer;font-size:12px;transition:.12s}
+  .btn:hover{border-color:var(--ts);color:#fff}
+  .btn.stock{border-color:var(--ts2)}
+  select{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 8px;font-size:12px}
+
+  .grid{display:grid;grid-template-columns:1fr 366px;gap:10px;min-height:0}
+  .panel{background:var(--panel);border:1px solid var(--edge);border-radius:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .panel > .head{padding:9px 13px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .panel > .head .t{font-weight:600;font-size:12.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--dim)}
+  .panel > .head .r{margin-left:auto;color:var(--faint);font-size:11px}
+  .panel > .body{flex:1;min-height:0;position:relative;overflow:hidden}
+
+  #schematic{grid-column:1}
+  #inspector{grid-column:2}
+
+  /* ---- Schematic ---- */
+  #svgwrap{position:absolute;inset:0;overflow:hidden;padding:4px 6px}
+  svg{width:100%;height:100%;display:block}
+  .wire{stroke:var(--wire);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}
+  .sym{stroke:var(--symbol);stroke-width:1.7;fill:none;stroke-linejoin:round;stroke-linecap:round}
+  .sym.fill{fill:var(--symbol)}
+  .jnc{fill:var(--wire)}
+  text{-webkit-user-select:none;user-select:none}
+  .ref{fill:var(--dim);font:600 11px var(--mono);text-anchor:middle}
+  .val{fill:var(--ts);font:600 11px var(--mono);text-anchor:middle}
+  .rail{fill:var(--faint);font:9px var(--mono);text-anchor:middle}
+  .anno{fill:var(--faint);font:10px var(--mono);text-anchor:middle;letter-spacing:.5px}
+  .stagebar{fill:var(--faint);font:10px var(--mono);text-anchor:middle;letter-spacing:1.5px}
+
+  .comp{cursor:pointer}
+  .comp .hl{fill:transparent;stroke:transparent;stroke-width:1.6;rx:8}
+  .comp:hover .hl{stroke:var(--ts)}
+  .comp:hover .sym{stroke:#fff}
+  .comp.sel .hl{stroke:var(--accent);fill:rgba(255,207,63,.07)}
+  .comp.sel .sym{stroke:var(--accent)}
+  .comp.sel .val{fill:var(--accent)}
+
+  .probe{cursor:pointer}
+  .probe .pring{fill:var(--panel);stroke:var(--cool);stroke-width:1.8}
+  .probe .pcore{fill:var(--cool)}
+  .probe .plabel{fill:var(--faint);font:9px var(--mono);text-anchor:middle}
+  .probe:hover .pring{stroke:#fff} .probe:hover .plabel{fill:var(--dim)}
+  .probe.on .pring{fill:#2a2413;stroke:var(--accent);stroke-width:2.4}
+  .probe.on .pcore{fill:var(--accent)}
+  .probe.on .plabel{fill:var(--accent)}
+
+  /* ---- Signal Injector ---- */
+  .inj{padding:13px;display:flex;flex-direction:column;gap:12px}
+  .ijrow{display:flex;flex-direction:column;gap:6px}
+  .kl{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+  .kl b{color:var(--ink);font-family:var(--mono)}
+  .wf{display:flex;gap:5px}
+  .opt{text-align:center;background:var(--panel2);border:1px solid var(--edge);border-radius:7px;padding:7px 6px;cursor:pointer;font-size:11.5px;transition:.12s}
+  .opt small{display:block;color:var(--faint);font-size:9.5px;margin-top:2px}
+  .opt:hover{border-color:var(--ts)}
+  .opt.on{border-color:var(--accent);background:#26221a;color:#fff}
+  .opt.on small{color:var(--accent)}
+  .wf .opt{flex:1;min-width:0;padding:6px 4px}
+  .metrics{display:flex;gap:6px;flex-wrap:wrap}
+  .metric{flex:1 1 auto;background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:5px 8px;text-align:center;min-width:64px}
+  .metric .mk{font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.4px}
+  .metric .mv{font:600 13px var(--mono);color:var(--accent);margin-top:1px}
+  .probing{font-size:12px;color:var(--dim);background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:8px 11px}
+  .probing b{color:var(--cool);font-family:var(--mono)}
+  .scopebtn{width:100%;background:linear-gradient(160deg,var(--ts),var(--ts2));color:#04140b;font-weight:700;
+    border:none;border-radius:9px;padding:11px;cursor:pointer;font-size:13px;box-shadow:0 2px 10px rgba(63,174,74,.3)}
+  .scopebtn:hover{filter:brightness(1.08)}
+  .inspfoot{padding:12px 13px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:9px;flex:0 0 auto}
+  .footlabel{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+  .probehint{color:var(--faint);font-size:11px}
+  input[type=range]{width:100%;-webkit-appearance:none;height:5px;border-radius:5px;background:var(--edge);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--ts);cursor:pointer;border:2px solid #0c1a0e;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+
+  /* ---- Scope dock (draggable in-page oscilloscope window) ---- */
+  .scopedock{position:fixed;right:16px;bottom:16px;width:min(960px,94vw);height:min(600px,76vh);
+    background:#0b0e10;border:1px solid var(--edge);border-radius:12px;z-index:60;display:none;
+    flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden;resize:both;min-width:520px;min-height:360px}
+  .scopedock.open{display:flex}
+  .sw-bar{display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--panel);
+    border-bottom:1px solid var(--edge);cursor:move;user-select:none;flex:0 0 auto}
+  .sw-bar .t{font-weight:700;font-size:13px}
+  .sw-bar .h{color:var(--faint);font-size:11px}
+  .sw-bar .gr{flex:1}
+  .sw-bar button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer}
+  .sw-bar button:hover{border-color:var(--ts);color:#fff}
+  #scopeframe{flex:1;width:100%;border:0;background:#0b0e10}
+
+  /* ---- Inspector ---- */
+  .insp{padding:14px}
+  .insp .title{font-size:16px;font-weight:700}
+  .insp .role{color:var(--ts);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px;font-weight:600}
+  .insp p{color:var(--dim);line-height:1.5;font-size:13px;margin:10px 0}
+  .insp .sig{background:var(--panel2);border:1px solid var(--edge);border-radius:9px;padding:10px 12px;margin:12px 0}
+  .insp .sig .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+  .insp .sig .v{font:600 13px var(--mono);color:var(--ink);margin-top:3px}
+  .ctl{margin:14px 0}
+  .ctl label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px}
+  .ctl label b{color:var(--ink);font-family:var(--mono);font-weight:600}
+  .opts{display:flex;flex-wrap:wrap;gap:6px}
+  .opts .opt{flex:1 1 auto;min-width:60px}
+  .valuebox{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:9px 12px;
+    font:600 15px var(--mono);color:var(--ts)}
+  .fixedtag{display:inline-block;font-size:10px;color:var(--faint);border:1px solid var(--edge);border-radius:5px;
+    padding:2px 7px;margin-left:8px;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle}
+  .empty{color:var(--faint);padding:30px 16px;text-align:center;font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="badge">TS</div>
+    <div>
+      <h1>Tube Screamer Explorer</h1>
+      <div class="sub">Interactive TS808 schematic · <span id="modelnote">probe any node · simplified real-time model</span></div>
+    </div>
+    <div class="grow"></div>
+    <div class="pedal-select">Pedal
+      <select id="pedal"><option>TS808 Overdrive</option></select>
+    </div>
+    <button class="btn stock" id="reset">↺ Reset to stock</button>
+  </header>
+
+  <div class="grid">
+    <!-- SCHEMATIC -->
+    <div class="panel" id="schematic">
+      <div class="head"><span class="t">Schematic</span>
+        <span class="r">🟡 click any part to inspect &nbsp;·&nbsp; 🔵 click a probe clip to scope it</span></div>
+      <div class="body"><div id="svgwrap"><svg id="svg" viewBox="0 0 1500 560" preserveAspectRatio="xMidYMid meet"></svg></div></div>
+    </div>
+
+    <!-- INSPECTOR (+ circuit-state footer + scope launcher) -->
+    <div class="panel" id="inspector">
+      <div class="head"><span class="t">Component Inspector</span><span class="r" id="insp-ref"></span></div>
+      <div class="body"><div id="insp"></div></div>
+      <div class="inspfoot">
+        <div class="footlabel">Circuit state</div>
+        <div class="metrics">
+          <div class="metric"><div class="mk">Gain</div><div class="mv" id="m-gain">—</div></div>
+          <div class="metric"><div class="mk">Clip @</div><div class="mv" id="m-clip">—</div></div>
+          <div class="metric"><div class="mk">Mid bump</div><div class="mv" id="m-mid">—</div></div>
+          <div class="metric"><div class="mk">Grit</div><div class="mv" id="m-grit">—</div></div>
+        </div>
+        <div class="probing">Scope probe: <b id="probelbl">Op-amp output</b> <span class="probehint">· test signal is set inside the scope</span></div>
+        <button class="scopebtn" id="openscope">⧉ Open Oscilloscope &amp; Signal Generator</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Draggable in-page oscilloscope (iframe → no popup blockers, works on file://) -->
+  <div class="scopedock" id="scopeDock">
+    <div class="sw-bar" id="swBar">
+      <span class="t">◠ Oscilloscope</span>
+      <span class="h">drag to move · probe a node on the schematic to update it live</span>
+      <span class="gr"></span>
+      <button id="detachScope" title="Pop out to a separate browser window">⤢ New window</button>
+      <button id="closeScope">✕ Close</button>
+    </div>
+    <iframe id="scopeframe" title="Oscilloscope"></iframe>
+  </div>
+</div>
+
+<script src="dsp.js"></script>
+<script>
+"use strict";
+/* ============================================================================
+   TUBE SCREAMER EXPLORER — faithful TS808 signal-path schematic + real-time model
+   Probeable physical nodes: in → buf → clip(op-amp out) → tone → out
+   (the Drive part also exposes the theoretical pre-clip "boost" node)
+   ========================================================================== */
+
+// ---- Editable component definitions ------------------------------------
+const COMPONENTS = {
+  C1: { ref:"C1", name:"Input Coupling Cap", role:"High-pass into the buffer", node:"buf",
+    desc:"Blocks DC and sets how much low end enters the pedal. Bigger = fuller bass into Q1; smaller = thinner.",
+    param:"cin", kind:"opts",
+    options:[{v:0.01,label:"0.01µF",sub:"thin"},{v:0.022,label:"0.022µF",sub:"tight"},
+      {v:0.047,label:"0.047µF",sub:"stock",stock:true},{v:0.1,label:"0.1µF",sub:"full"}]},
+  RD: { ref:"VR1", name:"Drive Pot (500k)", role:"Sets clipping-stage gain", node:"boost",
+    desc:"The Drive knob. Raises the op-amp feedback resistance so the boosted signal grows until it hits the clipping diodes. More drive = more distortion.",
+    param:"drive", kind:"slider", min:0, max:500, step:1, unit:"kΩ", fmt:v=>v+" kΩ"},
+  CG: { ref:"C4", name:"Mid-Hump Cap", role:"Gain-stage corner frequency", node:"boost",
+    desc:"In the gain-setting leg with R6 (4.7k). Sets the frequency above which the stage boosts — the source of the famous Tube Screamer midrange bump.",
+    param:"cg", kind:"opts",
+    options:[{v:0.01,label:"0.01µF",sub:"~3.4kHz"},{v:0.047,label:"0.047µF",sub:"~720Hz",stock:true},
+      {v:0.22,label:"0.22µF",sub:"~155Hz"},{v:1.0,label:"1µF",sub:"~34Hz"}]},
+  D:  { ref:"D1/D2", name:"Clipping Diodes", role:"Shapes the overdrive", node:"clip",
+    desc:"The heart of the overdrive. Anti-parallel diodes across the op-amp feedback clamp the boosted signal past their forward voltage, rounding the peaks. Their type sets loudness and feel.",
+    param:"diode", kind:"opts",
+    options:[{v:"none",label:"None",sub:"clean boost"},{v:"ge",label:"Germ.",sub:"0.3V"},
+      {v:"si",label:"Silicon",sub:"0.6V",stock:true},{v:"asym",label:"Asym",sub:"gritty"},{v:"led",label:"LED",sub:"1.7V"}]},
+  TONE:{ ref:"VR2", name:"Tone Pot (20k)", role:"Active tilt filter", node:"tone",
+    desc:"Tilts the balance of lows and highs after clipping, pivoting around the mids. Left = dark/smooth, right = bright/cutting.",
+    param:"tone", kind:"slider", min:0, max:100, step:1, unit:"%", fmt:v=>(v<45?"dark ":v>55?"bright ":"flat ")+v+"%"},
+  VOL:{ ref:"VR3", name:"Level Pot (100k)", role:"Output volume", node:"out",
+    desc:"Final output level via the Q2 buffer. Doesn't change the distortion — only loudness vs bypass.",
+    param:"vol", kind:"slider", min:0, max:100, step:1, unit:"%", fmt:v=>v+"%"},
+
+  // ---- fixed / structural parts (clickable & inspectable, no swap) ----
+  JIN:{ ref:"J1", name:"Input Jack", role:"Signal in", node:"in", kind:"info", value:'¼" TS',
+    desc:"Where the guitar plugs in. Carries the raw pickup signal — usually 100–500 mV — into the pedal. On a real TS the jack's extra contact also switches the battery on when a cable is inserted.",
+    sig:"The raw guitar signal enters here." },
+  R2:{ ref:"R2", name:"Input Bias Resistor", role:"Biases Q1's base", node:"buf", kind:"info", value:"510 kΩ",
+    desc:"Feeds the buffer transistor's base to a mid-supply reference so the signal can swing up and down symmetrically. A bias resistor sets a DC operating point; it does not change the tone.",
+    sig:"Sets a DC bias only — the AC signal passes through unchanged." },
+  R1:{ ref:"R1", name:"Q1 Collector Resistor", role:"Buffer load", node:"buf", kind:"info", value:"10 kΩ",
+    desc:"The collector load for input buffer Q1. With the emitter resistor it sets the transistor's operating current. The buffer gives the guitar a high-impedance, low-loss path into the pedal at unity gain.",
+    sig:"Part of the unity-gain buffer — signal comes out the same size it went in." },
+  R3:{ ref:"R3", name:"Q1 Emitter Resistor", role:"Buffer output tap", node:"buf", kind:"info", value:"10 kΩ",
+    desc:"The emitter resistor of the input buffer; the buffered signal is taken from here. Sets the transistor's current and keeps the buffer stable across temperature.",
+    sig:"Buffered output — same amplitude as the input (a buffer has ~unity gain)." },
+  Q1:{ ref:"Q1", name:"Input Buffer Transistor", role:"Impedance buffer", node:"buf", kind:"info", value:"2SC1815 NPN",
+    desc:"An emitter-follower buffer. It presents a very high input impedance so it doesn't load down your pickups (keeping the tone bright), and a low output impedance to drive the next stage. Gain ≈ ×1 — it changes impedance, not level.",
+    sig:"Unity-gain buffer: identical waveform in and out, now low-impedance to drive the gain stage." },
+  C2:{ ref:"C2", name:"Coupling Cap", role:"Blocks DC into IC1a", node:"buf", kind:"info", value:"1 µF",
+    desc:"Passes the AC audio from the buffer into the op-amp's + input while blocking the buffer's DC bias. Large enough to pass all the bass unaffected.",
+    sig:"Removes the DC offset; the audio waveform passes straight through." },
+  IC1a:{ ref:"IC1a", name:"Clipping Op-Amp", role:"The gain stage", node:"clip", kind:"info", value:"½ JRC4558",
+    desc:"Half of the dual op-amp. Wired as a non-inverting amplifier with the Drive pot and clipping diodes in its feedback loop — this is where the signal is boosted and soft-clipped. The heart of the overdrive.",
+    sig:"Boosts the signal, then the feedback diodes clamp the peaks — the overdrive is created here." },
+  R5:{ ref:"R5", name:"Feedback Resistor", role:"Sets minimum gain", node:"boost", kind:"info", value:"51 kΩ",
+    desc:"Fixed feedback resistor in series with the Drive pot. It sets the gain even with Drive all the way down (≈ ×11 minimum), so the pedal always adds some boost.",
+    sig:"With Drive at zero this alone sets ~×11 gain into the diodes." },
+  C3:{ ref:"C3", name:"Feedback Stability Cap", role:"Tames the highs", node:"clip", kind:"info", value:"51 pF",
+    desc:"A tiny cap across the feedback. It rolls off the very high frequencies of the gain stage, keeping the op-amp stable and softening harsh high-order harmonics from the clipping — part of the TS's smooth voice.",
+    sig:"Shunts the highest frequencies in the feedback, smoothing the clipped edges." },
+  R6:{ ref:"R6", name:"Gain-Set Resistor", role:"Bottom of the gain divider", node:"boost", kind:"info", value:"4.7 kΩ",
+    desc:"Sits with C4 in the leg from the op-amp's − input to ground. It's the denominator of the gain equation, and together with C4 it creates the frequency-dependent midrange 'hump'.",
+    sig:"Sets stage gain with R5/VR1; with C4 it forms the midrange bump." },
+  C5:{ ref:"C5", name:"Coupling Cap", role:"Into the tone stage", node:"clip", kind:"info", value:"0.22 µF",
+    desc:"Couples the clipped signal from IC1a into the tone-control stage, blocking DC between them.",
+    sig:"Blocks DC; passes the clipped audio into the tone circuit." },
+  IC1b:{ ref:"IC1b", name:"Tone / Recovery Op-Amp", role:"Active tone filter", node:"tone", kind:"info", value:"½ JRC4558",
+    desc:"The other half of the op-amp. With the Tone pot and caps around it, it forms an active tilt filter that shifts balance between lows and highs, and buffers the signal before the volume control.",
+    sig:"Applies the tone tilt and buffers the signal for the output stage." },
+  R7:{ ref:"R7", name:"IC1b Bias Resistor", role:"Biases the tone op-amp", node:"tone", kind:"info", value:"10 kΩ",
+    desc:"References the tone op-amp's + input to the mid-supply bias so it operates centered. A DC bias resistor — no effect on the audio itself.",
+    sig:"DC bias only; the audio passes through unchanged." },
+  C6:{ ref:"C6", name:"Tone Cap", role:"Sets the tone pivot", node:"tone", kind:"info", value:"0.22 µF",
+    desc:"Works with the Tone pot to decide which frequencies get cut or boosted as you sweep the knob. It sets the treble side of the tilt filter.",
+    sig:"Feeds the high-frequency path of the tone control." },
+  Q2:{ ref:"Q2", name:"Output Buffer Transistor", role:"Output buffer", node:"out", kind:"info", value:"2SC1815 NPN",
+    desc:"A second emitter-follower buffer after the volume control. Gives the pedal a low output impedance so it can drive long cables and the next pedal or amp without losing highs. Unity gain.",
+    sig:"Unity-gain buffer: same waveform, now low-impedance to drive whatever's next." },
+  R8:{ ref:"R8", name:"Q2 Collector Resistor", role:"Output buffer load", node:"out", kind:"info", value:"10 kΩ",
+    desc:"Collector load for the output buffer transistor, setting its operating current.",
+    sig:"Part of the unity-gain output buffer." },
+  R9:{ ref:"R9", name:"Q2 Emitter Resistor", role:"Output tap", node:"out", kind:"info", value:"10 kΩ",
+    desc:"Emitter resistor of the output buffer; the final signal is taken from here through C7.",
+    sig:"Output tap of the buffer — final signal, low impedance." },
+  C7:{ ref:"C7", name:"Output Coupling Cap", role:"Blocks DC to the jack", node:"out", kind:"info", value:"1 µF",
+    desc:"Blocks the buffer's DC bias from reaching the output jack, passing only the audio to your amp or the next pedal.",
+    sig:"Strips DC; only the finished audio reaches the output." },
+  JOUT:{ ref:"J2", name:"Output Jack", role:"Signal out", node:"out", kind:"info", value:'¼" TS',
+    desc:"Sends the processed signal on to your amp or the next pedal. The end of the chain — probe here to see exactly what the pedal delivers.",
+    sig:"The pedal's final output — tone-shaped and set by the Level control." },
+};
+
+const STOCK = { cin:0.047, drive:250, cg:0.047, diode:"si", tone:50, vol:70, freq:220, amp:55, wf:"guitar" };
+const P = Object.assign({}, STOCK);
+let selected = "D";
+let probeNode = "clip";
+
+// =========================================================================
+//  SCHEMATIC SYMBOL LIBRARY (all return SVG markup strings)
+// =========================================================================
+const SP = [];                        // signal-spine polyline points for flow dots
+function W(pts){return `<polyline class="wire" points="${pts}"/>`;}     // wire
+function L(x1,y1,x2,y2,c="wire"){return `<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;}
+function jnc(x,y){return `<circle class="jnc" cx="${x}" cy="${y}" r="3"/>`;}
+function txt(x,y,s,c="anno"){return `<text class="${c}" x="${x}" y="${y}">${s}</text>`;}
+
+function gnd(x,y){ // ground pointing down from (x,y)
+  return `<g class="sym"><line x1="${x}" y1="${y}" x2="${x}" y2="${y+13}"/>
+    <line x1="${x-9}" y1="${y+13}" x2="${x+9}" y2="${y+13}"/>
+    <line x1="${x-5.5}" y1="${y+17}" x2="${x+5.5}" y2="${y+17}"/>
+    <line x1="${x-2}" y1="${y+21}" x2="${x+2}" y2="${y+21}"/></g>`;
+}
+function railUp(x,y,label){ // +9V / Vref stub going up
+  return `<g class="sym"><line x1="${x}" y1="${y}" x2="${x}" y2="${y-11}"/>
+    <line x1="${x-9}" y1="${y-11}" x2="${x+9}" y2="${y-11}"/></g>${txt(x,y-16,label,"rail")}`;
+}
+function railDn(x,y,label){ // stub going down to labeled rail
+  return `<g class="sym"><line x1="${x}" y1="${y}" x2="${x}" y2="${y+11}"/>
+    <line x1="${x-9}" y1="${y+11}" x2="${x+9}" y2="${y+11}"/></g>${txt(x,y+24,label,"rail")}`;
+}
+// resistor (IEC box). H=horizontal centered (cx,cy); endpoints cx±26
+const RH=26, BW=34, BH=13;
+function resH(cx,cy){return `<g class="sym"><line x1="${cx-RH}" y1="${cy}" x2="${cx-BW/2}" y2="${cy}"/>
+  <rect x="${cx-BW/2}" y="${cy-BH/2}" width="${BW}" height="${BH}" rx="1.5"/>
+  <line x1="${cx+BW/2}" y1="${cy}" x2="${cx+RH}" y2="${cy}"/></g>`;}
+function resV(cx,cy){return `<g class="sym"><line x1="${cx}" y1="${cy-RH}" x2="${cx}" y2="${cy-BW/2}"/>
+  <rect x="${cx-BH/2}" y="${cy-BW/2}" width="${BH}" height="${BW}" rx="1.5"/>
+  <line x1="${cx}" y1="${cy+BW/2}" x2="${cx}" y2="${cy+RH}"/></g>`;}
+// capacitor (two plates). endpoints ±16
+function capH(cx,cy){return `<g class="sym"><line x1="${cx-16}" y1="${cy}" x2="${cx-4}" y2="${cy}"/>
+  <line x1="${cx-4}" y1="${cy-9}" x2="${cx-4}" y2="${cy+9}"/>
+  <line x1="${cx+4}" y1="${cy-9}" x2="${cx+4}" y2="${cy+9}"/>
+  <line x1="${cx+4}" y1="${cy}" x2="${cx+16}" y2="${cy}"/></g>`;}
+function capV(cx,cy){return `<g class="sym"><line x1="${cx}" y1="${cy-16}" x2="${cx}" y2="${cy-4}"/>
+  <line x1="${cx-9}" y1="${cy-4}" x2="${cx+9}" y2="${cy-4}"/>
+  <line x1="${cx-9}" y1="${cy+4}" x2="${cx+9}" y2="${cy+4}"/>
+  <line x1="${cx}" y1="${cy+4}" x2="${cx}" y2="${cy+16}"/></g>`;}
+// diode horizontal, pointing right (anode left). endpoints ±16
+function diodeH(cx,cy,dir=1){
+  const t=8; const ax=dir>0?cx-t:cx+t, bx=dir>0?cx+t:cx-t;
+  return `<g class="sym"><line x1="${cx-16}" y1="${cy}" x2="${ax}" y2="${cy}"/>
+    <path class="fill" d="M${ax} ${cy-t} L${bx} ${cy} L${ax} ${cy+t} Z"/>
+    <line x1="${bx}" y1="${cy-t}" x2="${bx}" y2="${cy+t}"/>
+    <line x1="${bx}" y1="${cy}" x2="${cx+16*dir}" y2="${cy}"/></g>`;
+}
+// potentiometer as a resistor box with a wiper arrow (H orientation)
+function potH(cx,cy){return `<g class="sym"><line x1="${cx-RH}" y1="${cy}" x2="${cx-BW/2}" y2="${cy}"/>
+  <rect x="${cx-BW/2}" y="${cy-BH/2}" width="${BW}" height="${BH}" rx="1.5"/>
+  <line x1="${cx+BW/2}" y1="${cy}" x2="${cx+RH}" y2="${cy}"/>
+  <path class="fill" d="M${cx} ${cy-20} L${cx-4} ${cy-11} L${cx+4} ${cy-11} Z"/>
+  <line x1="${cx}" y1="${cy-20} " x2="${cx}" y2="${cy-11}"/></g>`;}
+// vertical pot (voltage divider): top,bottom terminals + wiper to the right
+function potV(cx,cy){return `<g class="sym"><line x1="${cx}" y1="${cy-RH}" x2="${cx}" y2="${cy-BW/2}"/>
+  <rect x="${cx-BH/2}" y="${cy-BW/2}" width="${BH}" height="${BW}" rx="1.5"/>
+  <line x1="${cx}" y1="${cy+BW/2}" x2="${cx}" y2="${cy+RH}"/>
+  <path class="fill" d="M${cx+20} ${cy} L${cx+11} ${cy-4} L${cx+11} ${cy+4} Z"/>
+  <line x1="${cx+20}" y1="${cy}" x2="${cx+11}" y2="${cy}"/></g>`;}
+// op-amp triangle. inputs at left (+top,-bottom), output at right apex
+function opamp(cx,cy,label){ // cx,cy = center; body 84 wide, 64 tall
+  const lx=cx-42, rx=cx+42, ty=cy-32, by=cy+32;
+  return `<g class="sym"><path d="M${lx} ${ty} L${lx} ${by} L${rx} ${cy} Z"/></g>
+    <text class="anno" x="${lx+16}" y="${cy-8}" style="font-size:13px">+</text>
+    <text class="anno" x="${lx+16}" y="${cy+18}" style="font-size:15px">–</text>
+    ${txt(cx-8,cy+4,label,"anno")}`;
+}
+// NPN transistor, base left, collector up, emitter down
+function npn(cx,cy,label){
+  const r=17;
+  return `<g class="sym"><circle cx="${cx}" cy="${cy}" r="${r}"/>
+    <line x1="${cx-30}" y1="${cy}" x2="${cx-7}" y2="${cy}"/>
+    <line x1="${cx-7}" y1="${cy-11}" x2="${cx-7}" y2="${cy+11}"/>
+    <line x1="${cx-7}" y1="${cy-5}" x2="${cx+9}" y2="${cy-14}"/>
+    <line x1="${cx+9}" y1="${cy-14}" x2="${cx+9}" y2="${cy-30}"/>
+    <line x1="${cx-7}" y1="${cy+5}" x2="${cx+9}" y2="${cy+14}"/>
+    <line x1="${cx+9}" y1="${cy+14}" x2="${cx+9}" y2="${cy+30}"/>
+    <path class="fill" d="M${cx+3} ${cy+7} L${cx+9} ${cy+14} L${cx+1} ${cy+13} Z"/></g>
+    ${txt(cx+24,cy+4,label,"anno")}`;
+}
+// clickable component wrapper
+function comp(key, inner, hx,hy,hw,hh, refx,refy, ref, valx,valy){
+  return `<g class="comp" data-key="${key}">
+    <rect class="hl" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="8"/>
+    ${inner}
+    <text class="ref" x="${refx}" y="${refy}">${ref}</text>
+    <text class="val" data-val="${key}" x="${valx}" y="${valy}"></text></g>`;
+}
+// clickable wrapper for a fixed/structural part (adds highlight box + hit area)
+function hot(key, inner, hx,hy,hw,hh){
+  return `<g class="comp" data-key="${key}">
+    <rect class="hl" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="8"/>
+    ${inner}</g>`;
+}
+// clickable probe clip
+function probe(x,y,node,label,side){ // side: 'up' or 'down' for label placement
+  const ly = side==='down'? y+24 : y-14;
+  return `<g class="probe" data-probe="${node}">
+    <circle class="pring" cx="${x}" cy="${y}" r="6.5"/>
+    <circle class="pcore" cx="${x}" cy="${y}" r="2.6"/>
+    <text class="plabel" x="${x}" y="${ly}">${label}</text></g>`;
+}
+
+// =========================================================================
+//  BUILD THE TS808 SCHEMATIC
+// =========================================================================
+const svg=document.getElementById("svg");
+const YS=300;                       // main signal-spine y
+
+function buildSchematic(){
+  const g=[];
+  // ---- stage band labels (top) ----
+  const bands=[["INPUT BUFFER (Q1)",235],["CLIPPING AMP (IC1a)",560],
+    ["TONE (IC1b)",900],["LEVEL",1075],["OUTPUT BUFFER (Q2)",1290]];
+  bands.forEach(b=>g.push(txt(b[1],34,b[0],"stagebar")));
+  bands.forEach(b=>g.push(`<line class="wire" x1="${b[1]-150}" y1="46" x2="${b[1]+150}" y2="46" style="stroke:#232b31;stroke-width:1"/>`));
+
+  // ===== INPUT + C1 + Q1 buffer =====
+  // input jack
+  g.push(hot("JIN", `<g class="sym"><circle cx="70" cy="${YS}" r="8"/><circle class="fill" cx="70" cy="${YS}" r="2.6"/></g>`, 54,YS-16,32,32));
+  g.push(txt(70,YS-20,"🎸 IN","anno"));
+  g.push(W(`78,${YS} 108,${YS}`));
+  // C1 input cap (clickable)
+  g.push(comp("C1", capH(130,YS), 108,YS-24,44,48, 130,YS-24, "C1", 130,YS+34));
+  g.push(W(`146,${YS} 205,${YS}`));           // to Q1 base
+  // Q1 buffer
+  g.push(hot("Q1", npn(235,YS,"Q1"), 202,YS-36,58,72));
+  // collector -> R1 -> +9V
+  g.push(W(`244,${YS-30} 244,${YS-52}`));
+  g.push(hot("R1", resV(244,YS-78), 232,YS-104,24,52)); g.push(W(`244,${YS-104} 244,${YS-120}`)); g.push(railUp(244,YS-120,"+9V"));
+  g.push(txt(262,YS-78,"R1","ref")); g.push(txt(262,YS-64,"10k","val"));
+  // base bias R2 from Vref
+  g.push(W(`205,${YS} 205,${YS-40}`)); g.push(jnc(205,YS));
+  g.push(hot("R2", resH(179,YS-40), 153,YS-52,52,24)); g.push(W(`153,${YS-40} 140,${YS-40}`)); g.push(railUp(140,YS-40,"Vref"));
+  g.push(txt(179,YS-48,"R2","ref")); g.push(txt(205,YS-40+3,"",""));
+  // emitter -> output node + emitter resistor to gnd
+  g.push(W(`244,${YS+30} 244,${YS+52}`)); g.push(jnc(244,YS+52));
+  g.push(hot("R3", resV(244,YS+78), 232,YS+52,24,52)); g.push(W(`244,${YS+104} 244,${YS+120}`)); g.push(gnd(244,YS+120));
+  g.push(txt(263,YS+78,"R3","ref")); g.push(txt(263,YS+92,"10k","val"));
+  g.push(W(`244,${YS+52} 300,${YS+52} 300,${YS}`));   // emitter output up to spine
+  g.push(jnc(300,YS));
+  g.push(probe(300,YS-30,"buf","BUF",'up'));
+  g.push(W(`300,${YS-24} 300,${YS}`));
+  g.push(W(`300,${YS} 352,${YS}`));
+
+  // ===== C2 coupling into IC1a (+ input) =====
+  g.push(comp("C2", capH(380,YS), 358,YS-24,44,48, 380,YS-24, "C2", 380,YS+34));
+  g.push(W(`352,${YS} 364,${YS}`));
+  g.push(W(`396,${YS} 463,${YS}`));                    // spine into + input
+  // op-amp IC1a
+  const OAx=505, OAy=316;
+  g.push(hot("IC1a", opamp(OAx,OAy,"IC1a"), 463,284,84,64));
+  g.push(W(`547,316 560,316 560,${YS}`)); g.push(jnc(560,YS));   // output -> clip node
+  // ---- - input, gain leg, feedback buses ----
+  const NIN=463, NY=332, GL=430, LB=445, RB=560;
+  g.push(W(`${GL},${NY} ${NIN},${NY}`));               // - input wire
+  g.push(jnc(LB,NY)); g.push(jnc(GL,NY));
+  // gain-setting leg: R6 + C4 (mid cap) -> gnd
+  g.push(W(`${GL},${NY} ${GL},${NY+16}`));
+  g.push(hot("R6", resV(GL,NY+42), GL-12,NY+16,24,52)); g.push(txt(GL-21,NY+38,"R6","ref")); g.push(txt(GL-21,NY+52,"4.7k","val"));
+  g.push(W(`${GL},${NY+68} ${GL},${NY+86}`));
+  g.push(comp("CG", capV(GL,NY+102), GL-22,NY+84,44,44, GL+24,NY+98, "C4", GL+24,NY+112));
+  g.push(W(`${GL},${NY+118} ${GL},${NY+132}`)); g.push(gnd(GL,NY+132));
+  // feedback network above the op-amp
+  const yT=180, yD=224, yC=266;
+  g.push(W(`${LB},${NY} ${LB},${yT}`));                // left bus (from - input)
+  g.push(W(`${RB},${YS} ${RB},${yT}`));                // right bus (from clip node)
+  g.push(jnc(LB,yT)); g.push(jnc(RB,yT)); g.push(jnc(LB,yD)); g.push(jnc(RB,yD)); g.push(jnc(LB,yC)); g.push(jnc(RB,yC));
+  // top branch: R5 + VR1 (drive)
+  g.push(W(`${LB},${yT} ${LB+8},${yT}`));
+  g.push(hot("R5", resH(LB+34,yT), LB+8,yT-12,52,24)); g.push(txt(LB+34,yT-10,"R5","ref")); g.push(txt(LB+34,yT+18,"51k","val"));
+  g.push(W(`${LB+60},${yT} ${LB+82},${yT}`));
+  g.push(comp("RD", potH(LB+108,yT), LB+82,yT-30,52,54, LB+108,yT-32, "VR1", LB+108,yT+22));
+  g.push(W(`${LB+134},${yT} ${RB},${yT}`));
+  // clipping diodes branch (anti-parallel)
+  const dL=LB+40, dR=RB-30, dc=(LB+40+RB-30)/2;
+  g.push(W(`${LB},${yD} ${dL},${yD}`)); g.push(W(`${dR},${yD} ${RB},${yD}`));
+  g.push(comp("D",
+    `${W(`${dL},${yD} ${dL},${yD-9} ${dc-16},${yD-9}`)}${W(`${dc+16},${yD-9} ${dR},${yD-9} ${dR},${yD}`)}`+
+    `${W(`${dL},${yD} ${dL},${yD+9} ${dc-16},${yD+9}`)}${W(`${dc+16},${yD+9} ${dR},${yD+9} ${dR},${yD}`)}`+
+    `${diodeH(dc,yD-9,1)}${diodeH(dc,yD+9,-1)}`,
+    dL-4,yD-22,(dR-dL)+8,44, dc,yD-16, "D1/D2", dc,yD+22));
+  // C3 branch
+  g.push(W(`${LB},${yC} ${dc-16},${yC}`)); g.push(W(`${dc+16},${yC} ${RB},${yC}`));
+  g.push(hot("C3", capH(dc,yC), dc-18,yC-14,36,28)); g.push(txt(dc,yC+20,"C3 51pF","ref"));
+  // clip node continues along spine; probe placed to the right, clear of feedback
+  g.push(W(`560,${YS} 644,${YS}`));
+  g.push(jnc(610,YS)); g.push(W(`610,${YS} 610,${YS+34}`));
+  g.push(probe(610,YS+40,"clip","OP-AMP OUT",'down'));
+
+  // ===== TONE stage (IC1b + VR2) =====
+  g.push(comp("C5", capH(668,YS), 646,YS-24,44,48, 668,YS-24, "C5", 668,YS+34));
+  g.push(W(`684,${YS} 730,${YS}`));                       // + input
+  const T1x=772;
+  g.push(hot("IC1b", opamp(T1x,316,"IC1b"), 730,284,84,64));
+  g.push(W(`814,316 828,316 828,${YS}`)); g.push(jnc(828,YS));   // output -> tone node
+  // + input Vref bias (R7)
+  g.push(jnc(696,YS)); g.push(W(`696,${YS} 696,${YS+18}`));
+  g.push(hot("R7", resV(696,YS+44), 684,YS+18,24,52)); g.push(W(`696,${YS+70} 696,${YS+84}`)); g.push(railDn(696,YS+84,"Vref"));
+  g.push(txt(676,YS+40,"R7","ref"));
+  // - input + feedback (VR2 tone pot + C6)
+  const LBt=712, RBt=828, NYt=332, yP=214, yQ=252, tc=(712+828)/2;
+  g.push(W(`${LBt},${NYt} 730,${NYt}`)); g.push(jnc(LBt,NYt));
+  g.push(W(`${LBt},${NYt} ${LBt},${yP}`));                // left bus
+  g.push(W(`${RBt},${YS} ${RBt},${yP}`));                 // right bus
+  g.push(jnc(LBt,yP)); g.push(jnc(RBt,yP)); g.push(jnc(LBt,yQ)); g.push(jnc(RBt,yQ));
+  g.push(W(`${LBt},${yP} ${tc-26},${yP}`));
+  g.push(comp("TONE", potH(tc,yP), tc-28,yP-30,56,54, tc,yP-32, "VR2", tc,yP+22));
+  g.push(W(`${tc+26},${yP} ${RBt},${yP}`));
+  g.push(W(`${LBt},${yQ} ${tc-16},${yQ}`)); g.push(W(`${tc+16},${yQ} ${RBt},${yQ}`));
+  g.push(hot("C6", capH(tc,yQ), tc-18,yQ-14,36,28)); g.push(txt(tc,yQ+20,"C6 .22µF","ref"));
+  // tone node continues along spine; probe to the right
+  g.push(W(`828,${YS} 950,${YS}`));
+  g.push(jnc(880,YS)); g.push(W(`880,${YS} 880,${YS+34}`));
+  g.push(probe(880,YS+40,"tone","TONE OUT",'down'));
+
+  // ===== LEVEL pot VR3 =====
+  g.push(W(`950,${YS} 962,${YS} 962,${YS-26} 985,${YS-26}`));   // signal into top terminal
+  g.push(comp("VOL", potV(985,YS), 968,YS-30,66,66, 1012,YS-34, "VR3", 1012,YS-20));
+  g.push(W(`985,${YS+26} 985,${YS+40}`)); g.push(gnd(985,YS+40));
+  g.push(W(`1005,${YS} 1040,${YS}`));   // wiper -> out
+
+  // ===== OUTPUT buffer Q2 =====
+  g.push(W(`1040,${YS} 1263,${YS}`));
+  g.push(hot("Q2", npn(1290,YS,"Q2"), 1257,YS-36,58,72));
+  g.push(W(`1299,${YS-30} 1299,${YS-52}`)); g.push(hot("R8", resV(1299,YS-78), 1287,YS-104,24,52));
+  g.push(W(`1299,${YS-104} 1299,${YS-120}`)); g.push(railUp(1299,YS-120,"+9V"));
+  g.push(txt(1317,YS-78,"R8","ref"));
+  g.push(W(`1299,${YS+30} 1299,${YS+52}`)); g.push(jnc(1299,YS+52));
+  g.push(hot("R9", resV(1299,YS+78), 1287,YS+52,24,52)); g.push(W(`1299,${YS+104} 1299,${YS+120}`)); g.push(gnd(1299,YS+120));
+  g.push(txt(1318,YS+78,"R9","ref"));
+  g.push(W(`1299,${YS+52} 1360,${YS+52} 1360,${YS}`)); g.push(jnc(1360,YS));
+  g.push(comp("C7", capH(1400,YS), 1378,YS-24,44,48, 1400,YS-24, "C7", 1400,YS+34));
+  g.push(W(`1416,${YS} 1450,${YS}`));
+  g.push(hot("JOUT", `<g class="sym"><circle cx="1462" cy="${YS}" r="8"/><circle class="fill" cx="1462" cy="${YS}" r="2.6"/></g>`, 1446,YS-16,32,32));
+  g.push(txt(1462,YS-20,"OUT","anno"));
+  g.push(probe(1360,YS+90,"out","OUTPUT",'down')); g.push(W(`1360,${YS+52} 1360,${YS+84}`));
+
+  // input probe
+  g.push(probe(70,YS+30,"in","INPUT",'down')); g.push(W(`70,${YS+8} 70,${YS+24}`));
+
+  // ---- dot layer + spine ----
+  g.push(`<g id="dots"></g>`);
+  svg.innerHTML=g.join("");
+
+  // main signal spine for flow dots (straight along YS)
+  SP.length=0; SP.push([78,YS],[1450,YS]);
+
+  wireEvents();
+  updateSchematicValues();
+}
+
+// ---- events (delegation) ----
+function wireEvents(){
+  svg.querySelectorAll(".comp").forEach(el=>{
+    const k=el.getAttribute("data-key");
+    if(k.startsWith("_")) { el.style.cursor="default"; return; } // decorative-only comps
+    el.addEventListener("click",()=>select(k));
+  });
+  svg.querySelectorAll(".probe").forEach(el=>{
+    el.addEventListener("click",()=>setProbe(el.getAttribute("data-probe")));
+  });
+}
+function setProbe(n){ probeNode=n; updateProbeLabel(); sendScope(); updateSchematicValues(); }
+
+function currentValLabel(k){
+  const c=COMPONENTS[k]; if(!c)return"";
+  if(c.kind==="info") return c.value||"";
+  if(c.kind==="slider") return c.fmt(P[c.param]);
+  const o=c.options.find(o=>o.v===P[c.param]); return o?o.label:P[c.param];
+}
+function updateSchematicValues(){
+  svg.querySelectorAll("[data-val]").forEach(t=>{
+    const k=t.getAttribute("data-val"); if(COMPONENTS[k]) t.textContent=currentValLabel(k);});
+  svg.querySelectorAll(".comp").forEach(gel=>gel.classList.toggle("sel", gel.getAttribute("data-key")===selected));
+  svg.querySelectorAll(".probe").forEach(pel=>pel.classList.toggle("on", pel.getAttribute("data-probe")===probeNode));
+}
+
+// ---- Inspector ----
+const insp=document.getElementById("insp"), inspRef=document.getElementById("insp-ref");
+function nodeLabel(n){return{in:"Input",buf:"After input buffer",boost:"After gain (pre-clip)",
+  clip:"Op-amp output (clipped)",tone:"After tone",out:"Output"}[n];}
+function select(key){
+  selected=key; const c=COMPONENTS[key]; probeNode=c.node;
+  updateProbeLabel(); sendScope();
+  renderInspector(); updateSchematicValues();
+}
+function renderInspector(){
+  const c=COMPONENTS[selected]; inspRef.textContent=c.ref;
+  const fixed = c.kind==="info";
+  let ctl="";
+  if(c.kind==="slider"){
+    ctl=`<div class="ctl"><label>${c.role} <b id="liveval">${c.fmt(P[c.param])}</b></label>
+      <input type="range" id="pslider" min="${c.min}" max="${c.max}" step="${c.step}" value="${P[c.param]}"></div>`;
+  }else if(c.kind==="opts"){
+    ctl=`<div class="ctl"><label>Swap part</label><div class="opts" id="popts">`+
+      c.options.map(o=>`<div class="opt ${o.v===P[c.param]?"on":""}" data-v="${o.v}">${o.label}<small>${o.sub}</small></div>`).join("")+
+      `</div></div>`;
+  }else{
+    ctl=`<div class="ctl"><label>Value</label><div class="valuebox">${c.value||"—"}</div></div>`;
+  }
+  insp.innerHTML=`<div class="insp">
+      <div class="title">${c.name}${fixed?'<span class="fixedtag">fixed part</span>':''}</div>
+      <div class="role">${c.role}</div>
+      <p>${c.desc}</p>
+      <div class="sig"><div class="k">What happens to the signal here</div><div class="v" id="sigexplain">—</div></div>
+      ${ctl}
+      <div class="sig"><div class="k">Scope is probing</div><div class="v">${nodeLabel(c.node)}</div></div>
+    </div>`;
+  if(c.kind==="slider"){
+    const sl=document.getElementById("pslider");
+    sl.addEventListener("input",()=>{P[c.param]=+sl.value;
+      document.getElementById("liveval").textContent=c.fmt(P[c.param]); onParamChange();});
+  }else if(c.kind==="opts"){
+    insp.querySelectorAll("#popts .opt").forEach(o=>o.addEventListener("click",()=>{
+      let v=o.getAttribute("data-v"); if(!isNaN(+v))v=+v; P[c.param]=v; onParamChange();}));
+  }
+  updateSigExplain();
+}
+function onParamChange(){ updateSchematicValues(); renderInspector(); sendScope(); }
+function updateSigExplain(){
+  const e=document.getElementById("sigexplain"); if(!e)return; let s="";
+  const ci=COMPONENTS[selected]; if(ci && ci.kind==="info"){ e.textContent=ci.sig||ci.role; return; }
+  switch(selected){
+    case"C1":{const f=(1/(2*Math.PI*470000*P.cin*1e-6)).toFixed(1);
+      s=`Rolls off lows below ≈${f} Hz. Larger cap → fuller bass into the gain stage.`;break;}
+    case"RD":{const G=1+(51000+P.drive*1000)/4700;
+      s=`Stage gain ≈ ×${G.toFixed(1)} (${(20*Math.log10(G)).toFixed(1)} dB). Drives the signal into the diodes.`;break;}
+    case"CG":{const f=(1/(2*Math.PI*4700*P.cg*1e-6)).toFixed(0);
+      s=`Boost starts above ≈${f} Hz. Lower cap → higher, thinner bump; higher → fuller boost.`;break;}
+    case"D":{s={none:"No clipping — clean, loud boost with big dynamics.",ge:"Soft clip at ~0.3 V — smooth, quiet, vintage.",
+      si:"Symmetric clip at ~0.6 V — classic warm overdrive.",asym:"Uneven ±clip — adds even harmonics, gritty & vocal.",
+      led:"Clips at ~1.7 V — louder, more open, amp-like."}[P.diode];break;}
+    case"TONE":{s=P.tone<45?"Cutting highs — darker, rounder.":P.tone>55?"Boosting highs — brighter, more presence.":"Balanced tilt around the mids.";break;}
+    case"VOL":{s=`Output at ${P.vol}% — makeup volume vs bypass, no tone change.`;break;}
+  }
+  e.textContent=s;
+}
+
+// =========================================================================
+//  SCOPE POP-OUT WINDOW  (the oscilloscope lives in scope.html)
+// =========================================================================
+let scopeWin=null;              // current message target (dock iframe window or popup)
+const dock=()=>document.getElementById("scopeDock");
+const scopeframe=()=>document.getElementById("scopeframe");
+function openScope(){
+  dock().classList.add("open");
+  const f=scopeframe();
+  if(!f.getAttribute("src")){ f.setAttribute("src","scope.html"); }   // loads → posts "ready"
+  else { scopeWin=f.contentWindow; setTimeout(sendScope,60); }
+}
+function closeScope(){ dock().classList.remove("open"); }
+function detachScope(){
+  const w=window.open("scope.html","tsscope","width=1180,height=800");
+  if(w){ scopeWin=w; closeScope(); scopeframe().removeAttribute("src"); }
+  else { alert("Your browser blocked the pop-out window. The docked oscilloscope is still available."); }
+}
+function sendScope(){ if(scopeWin){ try{ scopeWin.postMessage({type:"state",P,probeNode},"*"); }catch(_){} } }
+window.addEventListener("message",e=>{ const d=e.data; if(!d) return;
+  if(d.type==="ready"){ if(e.source) scopeWin=e.source; sendScope(); }
+  else if(d.type==="signal"){                 // function generator lives in the scope; it drives P here
+    if(d.wf!==undefined)   P.wf=d.wf;
+    if(d.freq!==undefined) P.freq=+d.freq;
+    if(d.amp!==undefined)  P.amp=+d.amp;
+  }
+});
+function updateProbeLabel(){ const el=document.getElementById("probelbl"); if(el) el.textContent=nodeLabel(probeNode); }
+// make the dock draggable by its title bar
+function initDockDrag(){
+  const d=dock(), bar=document.getElementById("swBar"); let on=false,ox=0,oy=0;
+  bar.addEventListener("pointerdown",e=>{ if(e.target.tagName==="BUTTON")return; on=true;
+    const r=d.getBoundingClientRect(); ox=e.clientX-r.left; oy=e.clientY-r.top;
+    d.style.right="auto"; d.style.bottom="auto"; d.style.left=r.left+"px"; d.style.top=r.top+"px";
+    bar.setPointerCapture(e.pointerId); });
+  bar.addEventListener("pointermove",e=>{ if(!on)return;
+    d.style.left=Math.max(0,Math.min(window.innerWidth-120,e.clientX-ox))+"px";
+    d.style.top=Math.max(0,Math.min(window.innerHeight-40,e.clientY-oy))+"px"; });
+  bar.addEventListener("pointerup",()=>{ on=false; });
+}
+
+// ---- signal-flow dots along the spine ----
+let flowT=0;
+function spinePt(t){ // t 0..1 along straight spine
+  const x=SP[0][0]+(SP[1][0]-SP[0][0])*t; return [x,SP[0][1]];
+}
+function mix(a,b,t){const pa=hex(a),pb=hex(b);return`rgb(${Math.round(pa[0]+(pb[0]-pa[0])*t)},${Math.round(pa[1]+(pb[1]-pa[1])*t)},${Math.round(pa[2]+(pb[2]-pa[2])*t)})`;}
+function hex(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function drawDots(chain){
+  const layer=document.getElementById("dots"); if(!layer)return;
+  const CLIPX=560, nDots=26; let s="";
+  for(let i=0;i<nDots;i++){
+    let p=((i/nDots)+flowT)%1; const pt=spinePt(p); const x=pt[0];
+    const past=x>CLIPX; const g=chain.grit;
+    const wob=Math.sin(flowT*12.56+i)*(past?3.2*(1-g):6);
+    const y=pt[1]-wob; const r=past?3.0+2.4*g:2.8;
+    const col=past?mix("#ffcf3f","#ff6b5c",g):"#4cc2ff";
+    s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${col}" opacity="0.9"/>`;
+  }
+  layer.innerHTML=s;
+}
+
+function updateMetrics(c){
+  document.getElementById("m-gain").textContent=(20*Math.log10(c.G)).toFixed(0)+" dB";
+  document.getElementById("m-clip").textContent=c.Vf>=90?"—":"±"+c.Vf.toFixed(1)+"V";
+  document.getElementById("m-mid").textContent=Math.round(c.fMid)+" Hz";
+  document.getElementById("m-grit").textContent=Math.round(c.grit*100)+"%";
+}
+
+// ---- main loop (drives flow-dots + metrics on the schematic) ----
+function loop(){
+  const dt=(3/Math.max(60,P.freq))/1024;
+  const chain=TSDSP.compute(P,1024,dt,0);
+  drawDots(chain); updateMetrics(chain); updateSigExplain();
+  flowT=(flowT+0.005)%1; requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+document.getElementById("reset").addEventListener("click",()=>{
+  Object.assign(P,STOCK);                     // includes the signal params; sendScope refreshes the scope's generator UI
+  renderInspector();updateSchematicValues();sendScope();});
+document.getElementById("openscope").addEventListener("click",openScope);
+document.getElementById("closeScope").addEventListener("click",closeScope);
+document.getElementById("detachScope").addEventListener("click",detachScope);
+
+// ---- boot ----
+buildSchematic(); select("D"); updateProbeLabel(); initDockDrag(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

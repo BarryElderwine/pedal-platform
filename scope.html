@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Oscilloscope — Learning Mode</title>
+<style>
+  :root{
+    --bg:#0b0e10; --panel:#151a1e; --panel2:#1d242a; --edge:#2c353c;
+    --ink:#e7edf1; --dim:#93a3ae; --faint:#61707b;
+    --ch1:#43c9ff; --ch2:#ffd23f; --trace:#38ff9e; --trig:#ff8a3d; --grid:#173226;
+    --accent:#ffcf3f; --ok:#43d977; --warn:#ffb020;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:14px var(--sans);overflow:hidden}
+  .app{display:grid;grid-template-rows:auto 1fr;height:100vh;gap:8px;padding:8px}
+  header{display:flex;align-items:center;gap:12px}
+  .badge{width:30px;height:30px;border-radius:7px;background:linear-gradient(160deg,#38ff9e,#1c9c62);
+    display:grid;place-items:center;font-weight:800;color:#04140b;font-size:13px}
+  h1{font-size:15px;margin:0;font-weight:700}
+  .sub{color:var(--dim);font-size:11px;margin-top:1px}
+  header .grow{flex:1}
+  .link{font:11px var(--mono);color:var(--dim);background:var(--panel2);border:1px solid var(--edge);
+    border-radius:20px;padding:4px 11px}
+  .link b{color:var(--ch2)}
+  .btn{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12px}
+  .btn:hover{border-color:var(--trace);color:#fff}
+  .btn.on{border-color:var(--accent);background:#26221a;color:#fff}
+
+  .main{display:grid;grid-template-columns:1fr 300px;gap:8px;min-height:0}
+  .screenwrap{display:grid;grid-template-rows:1fr auto;gap:8px;min-height:0}
+  .scopebox{position:relative;background:#05100b;border:1px solid var(--edge);border-radius:12px;
+    overflow:hidden;box-shadow:inset 0 0 60px rgba(0,0,0,.6)}
+  canvas{display:block;width:100%;height:100%}
+  .hint{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:8px 12px;
+    font:12px var(--mono);display:flex;align-items:center;gap:8px;min-height:38px}
+  .hint .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:0 0 auto}
+  .hint.warn .dot{background:var(--warn)} .hint.warn{color:var(--warn)}
+
+  .rack{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
+  .grp{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:9px 11px}
+  .grp h3{margin:0 0 8px;font:600 10px var(--sans);letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    display:flex;align-items:center;gap:6px}
+  .grp h3 .sw{width:9px;height:9px;border-radius:2px}
+  .row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+  .row label{color:var(--dim);flex:0 0 74px}
+  .row .v{margin-left:auto;font:600 11px var(--mono);color:var(--ink)}
+  select{flex:1;background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:6px;padding:4px 6px;font:12px var(--mono)}
+  input[type=range]{flex:1;-webkit-appearance:none;height:4px;border-radius:4px;background:var(--edge);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--trace);cursor:pointer;border:2px solid #04140b}
+  .seg{display:flex;gap:4px}
+  .seg .o{flex:1;text-align:center;background:var(--panel2);border:1px solid var(--edge);border-radius:6px;padding:4px;cursor:pointer;font-size:11px}
+  .seg .o.on{border-color:var(--accent);background:#26221a;color:#fff}
+  .chtog{cursor:pointer;margin-left:auto;font:10px var(--mono);color:var(--faint);border:1px solid var(--edge);border-radius:5px;padding:2px 7px}
+  .chtog.on{color:#04140b;font-weight:700}
+  .meas{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .meas .m{background:var(--panel2);border:1px solid var(--edge);border-radius:7px;padding:5px 8px}
+  .meas .m .k{font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.4px}
+  .meas .m .val{font:600 13px var(--mono);margin-top:1px}
+  .meas .m.c1 .val{color:var(--ch1)} .meas .m.c2 .val{color:var(--ch2)}
+
+  /* lessons drawer */
+  .lessons{position:fixed;top:0;right:0;height:100vh;width:380px;background:var(--panel);
+    border-left:1px solid var(--edge);box-shadow:-8px 0 30px rgba(0,0,0,.5);
+    transform:translateX(100%);transition:transform .25s;z-index:20;display:flex;flex-direction:column}
+  .lessons.open{transform:none}
+  .lessons .lh{padding:12px 14px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:8px}
+  .lessons .lh h2{font-size:14px;margin:0}
+  .lessons .lb{padding:10px 14px;overflow:auto}
+  .lesson{border:1px solid var(--edge);border-radius:9px;margin-bottom:8px;overflow:hidden;background:var(--panel2)}
+  .lesson .q{padding:10px 12px;cursor:pointer;font-weight:600;font-size:13px;display:flex;gap:8px;align-items:center}
+  .lesson .q .n{width:20px;height:20px;border-radius:50%;background:#26221a;color:var(--accent);display:grid;place-items:center;font:600 11px var(--mono);flex:0 0 auto}
+  .lesson .a{padding:0 12px 12px 42px;color:var(--dim);font-size:12.5px;line-height:1.55;display:none}
+  .lesson.open .a{display:block}
+  .lesson .a b{color:var(--ink)} .lesson .a code{color:var(--trace);font-family:var(--mono);font-size:12px}
+  .lesson .try{margin-top:8px;background:var(--panel);border:1px solid var(--edge);color:var(--trace);
+    border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer}
+  .lesson .try:hover{border-color:var(--trace)}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:15;display:none}
+  .scrim.on{display:block}
+  .flash{outline:2px solid var(--accent)!important;transition:outline .1s}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="badge">◠</div>
+    <div>
+      <h1>Oscilloscope <span style="color:var(--dim);font-weight:400">— Learning Mode</span></h1>
+      <div class="sub">A benchtop scope for probing the pedal · trigger, timebase &amp; measure</div>
+    </div>
+    <div class="grow"></div>
+    <div class="link" id="link">CH2 probing: <b id="probelbl">—</b></div>
+    <button class="btn" id="autoset">Auto-set</button>
+    <button class="btn" id="lessonbtn">📖 Lessons</button>
+  </header>
+
+  <div class="main">
+    <div class="screenwrap">
+      <div class="scopebox"><canvas id="cv"></canvas></div>
+      <div class="hint" id="hint"><span class="dot"></span><span id="hinttxt">Ready.</span></div>
+    </div>
+
+    <div class="rack">
+      <!-- SIGNAL INJECTOR (function generator) -->
+      <div class="grp" id="grp-sig">
+        <h3>🎛 Signal Injector · function generator</h3>
+        <div class="row"><label>Waveform</label>
+          <div class="seg" id="sigwf" style="flex:1">
+            <div class="o" data-wf="guitar">Pluck</div><div class="o" data-wf="sine">Sine</div>
+            <div class="o" data-wf="tri">Tri</div><div class="o" data-wf="square">Sqr</div></div></div>
+        <div class="row"><label>Pitch</label><input type="range" id="sigfreq" min="60" max="1200" step="1" value="220"><span class="v" id="sigfreqv">220 Hz</span></div>
+        <div class="row"><label>Strength</label><input type="range" id="sigamp" min="5" max="100" step="1" value="55"><span class="v" id="sigampv">55%</span></div>
+      </div>
+      <!-- VERTICAL CH1 -->
+      <div class="grp" id="grp-ch1">
+        <h3><span class="sw" style="background:var(--ch1)"></span>Ch 1 · Input
+          <span class="chtog on" id="ch1on" style="background:var(--ch1);border-color:var(--ch1)">ON</span></h3>
+        <div class="row"><label>Volts/div</label><select id="ch1vdiv"></select></div>
+        <div class="row"><label>Position</label><input type="range" id="ch1pos" min="-3" max="3" step="0.1" value="0"><span class="v" id="ch1posv">0.0</span></div>
+        <div class="row"><label>Coupling</label>
+          <div class="seg" id="ch1coup"><div class="o on" data-c="DC">DC</div><div class="o" data-c="AC">AC</div><div class="o" data-c="GND">GND</div></div></div>
+      </div>
+      <!-- VERTICAL CH2 -->
+      <div class="grp" id="grp-ch2">
+        <h3><span class="sw" style="background:var(--ch2)"></span>Ch 2 · Probe
+          <span class="chtog on" id="ch2on" style="background:var(--ch2);border-color:var(--ch2)">ON</span></h3>
+        <div class="row"><label>Node</label><select id="ch2node"></select></div>
+        <div class="row"><label>Volts/div</label><select id="ch2vdiv"></select></div>
+        <div class="row"><label>Position</label><input type="range" id="ch2pos" min="-3" max="3" step="0.1" value="0"><span class="v" id="ch2posv">0.0</span></div>
+        <div class="row"><label>Coupling</label>
+          <div class="seg" id="ch2coup"><div class="o on" data-c="DC">DC</div><div class="o" data-c="AC">AC</div><div class="o" data-c="GND">GND</div></div></div>
+      </div>
+      <!-- HORIZONTAL -->
+      <div class="grp" id="grp-horiz">
+        <h3>⏱ Horizontal (timebase)</h3>
+        <div class="row"><label>Time/div</label><select id="tdiv"></select></div>
+      </div>
+      <!-- TRIGGER -->
+      <div class="grp" id="grp-trig">
+        <h3><span class="sw" style="background:var(--trig)"></span>Trigger</h3>
+        <div class="row"><label>Source</label>
+          <div class="seg" id="trigsrc"><div class="o on" data-s="0">CH1</div><div class="o" data-s="1">CH2</div></div></div>
+        <div class="row"><label>Edge</label>
+          <div class="seg" id="trigedge"><div class="o on" data-e="1">Rising ↑</div><div class="o" data-e="-1">Falling ↓</div></div></div>
+        <div class="row"><label>Mode</label>
+          <div class="seg" id="trigmode"><div class="o on" data-m="auto">Auto</div><div class="o" data-m="normal">Normal</div></div></div>
+        <div class="row"><label>Level</label><input type="range" id="triglvl" min="-2" max="2" step="0.005" value="0"><span class="v" id="triglvlv">0.00 V</span></div>
+      </div>
+      <!-- MEASURE -->
+      <div class="grp">
+        <h3>📐 Measurements</h3>
+        <div class="meas">
+          <div class="m c1"><div class="k">CH1 Vpp</div><div class="val" id="m1vpp">—</div></div>
+          <div class="m c2"><div class="k">CH2 Vpp</div><div class="val" id="m2vpp">—</div></div>
+          <div class="m c1"><div class="k">CH1 Freq</div><div class="val" id="m1f">—</div></div>
+          <div class="m c2"><div class="k">CH2 Freq</div><div class="val" id="m2f">—</div></div>
+          <div class="m c2"><div class="k">CH2 Vmax</div><div class="val" id="m2max">—</div></div>
+          <div class="m c2"><div class="k">Gain C2/C1</div><div class="val" id="mgain">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lessons drawer -->
+<div class="scrim" id="scrim"></div>
+<div class="lessons" id="lessons">
+  <div class="lh"><h2>📖 How to use this scope</h2><div class="grow" style="flex:1"></div>
+    <button class="btn" id="lessonclose">✕</button></div>
+  <div class="lb" id="lessonlist"></div>
+</div>
+
+<script src="dsp.js"></script>
+<script>
+"use strict";
+/* ============================ SCOPE STATE ================================= */
+let P = Object.assign({}, TSDSP.STOCK);   // signal params (synced from main window)
+let probeNode = "clip";
+
+const VDIV = [0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5];   // volts/div
+const TDIV = [20e-6,50e-6,100e-6,200e-6,500e-6,1e-3,2e-3,5e-3,10e-3,20e-3];
+const DIV_X = 10, DIV_Y = 8;              // graticule divisions
+
+const S = {                                // scope control state
+  ch1:{on:true, vdiv:0.1, pos:0, coup:"DC"},
+  ch2:{on:true, vdiv:0.5, pos:0, coup:"DC", node:"clip"},
+  tdiv:1e-3,
+  trig:{src:0, edge:1, mode:"auto", level:0},
+};
+
+/* ============================ SYNC WITH MAIN ============================= */
+window.addEventListener("message", e=>{
+  const d=e.data; if(!d) return;
+  if(d.type==="state"){
+    P = Object.assign({}, d.P);
+    if(d.probeNode){ probeNode=d.probeNode; S.ch2.node=probeNode; syncCh2Node(); }
+    reflectLink(); reflectSignalControls();
+  }
+});
+// announce readiness to whoever hosts us: a popup opener, or a parent frame (dock iframe)
+const SYNC_TARGET = window.opener || (window.parent && window.parent!==window ? window.parent : null);
+if(SYNC_TARGET){ try{ SYNC_TARGET.postMessage({type:"ready"}, "*"); }catch(_){} }
+function reflectLink(){ document.getElementById("probelbl").textContent =
+  (TSDSP.NODE_LABEL[S.ch2.node]||S.ch2.node)+"  ·  "+P.freq+"Hz "+P.wf; }
+// push a signal-generator change back to the host so its model + flow dots follow
+function postSignal(obj){ if(SYNC_TARGET){ try{ SYNC_TARGET.postMessage(Object.assign({type:"signal"},obj),"*"); }catch(_){} } }
+// mirror the current P into the generator controls (on load and on host updates)
+function reflectSignalControls(){
+  const box=document.getElementById("sigwf");
+  if(box) box.querySelectorAll(".o").forEach(o=>o.classList.toggle("on",o.getAttribute("data-wf")===P.wf));
+  const sf=document.getElementById("sigfreq"); if(sf){ sf.value=P.freq; document.getElementById("sigfreqv").textContent=P.freq+" Hz"; }
+  const sa=document.getElementById("sigamp"); if(sa){ sa.value=P.amp; document.getElementById("sigampv").textContent=P.amp+"%"; }
+}
+
+/* ============================ SIGNAL SAMPLING =========================== */
+// Build a processed buffer covering warmup + trigger-search + one screen window,
+// all at uniform dt, so triggering & pixel mapping are simple.
+function buildFrame(){
+  const Wpx = Math.max(200, cv.width);
+  const tdiv = S.tdiv, Twin = DIV_X*tdiv, dt = Twin/Wpx;
+  const f = P.freq;
+  const Nwarm  = Math.min(8000, Math.round(Math.max(0.12, 3/f)/dt));
+  const Nsearch= Math.min(9000, Math.max(8, Math.round((1/f)/dt)));
+  const Ntot = Nwarm + Nsearch + Wpx;
+  const t0 = -(Nwarm + Nsearch)*dt;
+  const ch = TSDSP.compute(P, Ntot, dt, t0);
+  return { ch, Wpx, dt, Nwarm, Nsearch, Ntot, tdiv };
+}
+function nodeArr(ch, node){ return ch[node] || ch.clip; }
+
+// apply coupling to a slice (returns function value getter with offset removed for AC)
+function couplingMean(arr, s, n){
+  let m=0; for(let i=0;i<n;i++) m+=arr[s+i]; return m/n;
+}
+
+/* ============================ RENDER ==================================== */
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+let dpr=Math.min(2,window.devicePixelRatio||1);
+function fit(){ const r=cv.getBoundingClientRect(); cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr); }
+window.addEventListener("resize",()=>{ dpr=Math.min(2,window.devicePixelRatio||1); fit(); });
+
+let freeScroll=0;
+function draw(){
+  const F=buildFrame(); const {ch,Wpx,dt,Nwarm,Nsearch}=F;
+  const W=cv.width, H=cv.height;
+  const in1=ch.in, in2=nodeArr(ch,S.ch2.node);
+  const src = S.trig.src===0 ? in1 : in2;
+
+  // ---- trigger search within [Nwarm, Nwarm+Nsearch) ----
+  const lvl=S.trig.level, edge=S.trig.edge;
+  let trigIdx=-1;
+  for(let i=Nwarm+1;i<Nwarm+Nsearch;i++){
+    const a=src[i-1], b=src[i];
+    if(edge>0 ? (a<lvl && b>=lvl) : (a>lvl && b<=lvl)){ trigIdx=i; break; }
+  }
+  const triggered = trigIdx>=0;
+  // start index so the trigger sits at horizontal centre
+  let sIdx;
+  if(triggered){ sIdx = trigIdx - Math.round(Wpx*0.5); }
+  else if(S.trig.mode==="auto"){ freeScroll=(freeScroll+2)%Wpx; sIdx=Nwarm+freeScroll; }
+  else { sIdx = Nwarm; }               // normal + no trig: hold (show flat-ish)
+  sIdx=Math.max(0, Math.min(sIdx, F.Ntot-Wpx-1));
+
+  // ---- draw graticule ----
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#05100b"; ctx.fillRect(0,0,W,H);
+  ctx.lineWidth=1;
+  ctx.strokeStyle="rgba(56,255,158,.10)";
+  for(let i=0;i<=DIV_X;i++){ const x=W*i/DIV_X; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+  for(let i=0;i<=DIV_Y;i++){ const y=H*i/DIV_Y; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+  // centre cross + fine ticks
+  ctx.strokeStyle="rgba(56,255,158,.28)";
+  ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  ctx.strokeStyle="rgba(56,255,158,.35)";
+  for(let i=1;i<DIV_X*5;i++){ if(i%5===0)continue; const x=W*i/(DIV_X*5); ctx.beginPath();ctx.moveTo(x,H/2-3);ctx.lineTo(x,H/2+3);ctx.stroke(); }
+  for(let i=1;i<DIV_Y*5;i++){ if(i%5===0)continue; const y=H*i/(DIV_Y*5); ctx.beginPath();ctx.moveTo(W/2-3,y);ctx.lineTo(W/2+3,y);ctx.stroke(); }
+
+  const pxPerDivY=H/DIV_Y;
+  const chY=(val,c)=>H/2 - (val/c.vdiv)*pxPerDivY - c.pos*pxPerDivY;
+
+  // ground-reference markers + trace plot
+  const plot=(arr,c,color,tag)=>{
+    if(!c.on) return;
+    // coupling
+    let mean=0; if(c.coup==="AC") mean=couplingMean(arr,sIdx,Wpx);
+    // ground ref marker (left)
+    const gy=H/2 - c.pos*pxPerDivY;
+    ctx.fillStyle=color; ctx.font=`${11*dpr}px Menlo,monospace`;
+    ctx.fillText("▶"+tag, 3*dpr, gy-4*dpr);
+    // trace
+    ctx.strokeStyle=color; ctx.lineWidth=2*dpr; ctx.shadowColor=color; ctx.shadowBlur=6*dpr;
+    ctx.beginPath();
+    for(let x=0;x<Wpx;x++){
+      const v = c.coup==="GND" ? 0 : arr[sIdx+x]-mean;
+      const y=chY(v,c);
+      const px=W*x/(Wpx-1);
+      x?ctx.lineTo(px,y):ctx.moveTo(px,y);
+    }
+    ctx.stroke(); ctx.shadowBlur=0;
+  };
+  plot(in1,S.ch1,"#43c9ff","1");
+  plot(in2,S.ch2,"#ffd23f","2");
+
+  // ---- trigger level marker ----
+  const tc = S.trig.src===0 ? S.ch1 : S.ch2;
+  const ty = chY(S.trig.level, tc);
+  ctx.strokeStyle="#ff8a3d"; ctx.setLineDash([5*dpr,4*dpr]); ctx.lineWidth=1*dpr;
+  ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle="#ff8a3d"; ctx.beginPath();
+  ctx.moveTo(W-2,ty);ctx.lineTo(W-12*dpr,ty-6*dpr);ctx.lineTo(W-12*dpr,ty+6*dpr);ctx.closePath();ctx.fill();
+  ctx.fillText("T", W-11*dpr, ty+4*dpr);
+
+  // ---- on-screen DSO readouts ----
+  ctx.font=`${11*dpr}px Menlo,monospace`;
+  const trg = triggered ? "Trig'd" : (S.trig.mode==="auto"?"Auto":"No Trig");
+  ctx.fillStyle = triggered? "#43d977" : "#ffb020";
+  ctx.fillText(trg, 8*dpr, 16*dpr);
+  ctx.fillStyle="#93a3ae";
+  ctx.fillText(`CH1 ${fmtV(S.ch1.vdiv)}/div`, 70*dpr, 16*dpr);
+  ctx.fillStyle="#ffd23f";
+  ctx.fillText(`CH2 ${fmtV(S.ch2.vdiv)}/div`, 190*dpr, 16*dpr);
+  ctx.fillStyle="#93a3ae";
+  ctx.fillText(`M ${fmtT(S.tdiv)}/div`, 310*dpr, 16*dpr);
+  ctx.fillText(`Trig ${S.trig.src===0?"CH1":"CH2"} ${S.trig.edge>0?"↑":"↓"} ${S.trig.level.toFixed(2)}V`, 410*dpr, 16*dpr);
+
+  // ---- measurements + coaching hints ----
+  // frequency is measured on a dedicated multi-cycle buffer (like a hardware
+  // counter) so it stays valid no matter how far the timebase is zoomed in.
+  const mdt=(4/Math.max(60,P.freq))/2048, mch=TSDSP.compute(P,2048,mdt,0);
+  measure(in1, mch.in, S.ch1,"1",sIdx,Wpx,dt,mdt);
+  measure(in2, nodeArr(mch,S.ch2.node), S.ch2,"2",sIdx,Wpx,dt,mdt);
+  computeGain(in1,in2,sIdx,Wpx);
+  coach(F, in1, in2, triggered, sIdx);
+
+  requestAnimationFrame(draw);
+}
+
+function fmtV(v){ return v<1 ? (v*1000)+"mV" : v+"V"; }
+function fmtT(t){ if(t>=1e-3) return (t*1e3).toFixed(t*1e3<10?2:0)+"ms"; if(t>=1e-6) return (t*1e6)+"µs"; return t+"s"; }
+
+/* ---- measurements ---- */
+function stats(arr,s,n,dt){
+  let mn=Infinity,mx=-Infinity,sum=0,sq=0;
+  for(let i=0;i<n;i++){ const v=arr[s+i]; if(v<mn)mn=v; if(v>mx)mx=v; sum+=v; sq+=v*v; }
+  const mean=sum/n, amp=(mx-mn)/2, h=Math.max(amp*0.2,1e-4);
+  // rising-edge times with hysteresis (ignores harmonic ripple near the mean)
+  const edges=[]; let armed=false;
+  for(let i=0;i<n;i++){ const v=arr[s+i]-mean;
+    if(v<-h) armed=true; else if(v>h && armed){ edges.push(i); armed=false; } }
+  let freq=0;
+  if(edges.length>=2){ const per=(edges[edges.length-1]-edges[0])/(edges.length-1)*(dt||1); if(per>0) freq=1/per; }
+  return { min:mn, max:mx, pp:mx-mn, rms:Math.sqrt(sq/n), mean, freq, ncyc:edges.length };
+}
+function measure(dispArr,measArr,c,id,s,n,dt,mdt){
+  const st=stats(dispArr,s,n,dt);                  // amplitude from what's on screen
+  const f=stats(measArr,0,measArr.length,mdt).freq; // frequency from the counter buffer
+  document.getElementById("m"+id+"vpp").textContent = c.on? fmtVolt(st.pp):"off";
+  document.getElementById("m"+id+"f").textContent   = c.on? (f>0?Math.round(f)+" Hz":"—"):"off";
+  if(id==="2"){ document.getElementById("m2max").textContent = c.on? fmtVolt(st.max):"off"; }
+}
+function fmtVolt(v){ const a=Math.abs(v); return a<1? (v*1000).toFixed(0)+" mV" : v.toFixed(2)+" V"; }
+function computeGain(in1,in2,s,n){
+  const a=stats(in1,s,n).pp, b=stats(in2,s,n).pp;
+  const g = a>1e-4 ? b/a : 0;
+  document.getElementById("mgain").textContent = g>0 ? "×"+g.toFixed(1)+" ("+(20*Math.log10(Math.max(g,1e-3))).toFixed(0)+"dB)" : "—";
+}
+
+/* ---- live coaching hints (the teaching feedback loop) ---- */
+function coach(F, in1, in2, triggered, sIdx){
+  const el=document.getElementById("hint"), tx=document.getElementById("hinttxt");
+  let msg="", warn=false;
+  const halfV = (DIV_Y/2);
+  const offscreen=(arr,c)=>{ if(!c.on)return false; const st=stats(arr,sIdx,F.Wpx);
+    return Math.max(Math.abs(st.max),Math.abs(st.min))/c.vdiv + Math.abs(c.pos) > halfV*0.98; };
+  const st1=stats(in1,sIdx,F.Wpx,F.dt), st2=stats(in2,sIdx,F.Wpx,F.dt);
+  const winT=F.Wpx*F.dt;
+
+  if(S.ch2.on && offscreen(in2,S.ch2)){ warn=true; msg="CH2 runs off-screen — increase CH2 Volts/div (turn it to a bigger V/div)."; }
+  else if(S.ch1.on && offscreen(in1,S.ch1)){ warn=true; msg="CH1 runs off-screen — increase CH1 Volts/div."; }
+  else if(!triggered && S.trig.mode==="normal"){ warn=true; msg="No trigger lock — move the Trigger Level into the waveform (Normal mode only sweeps on an edge)."; }
+  else if(!triggered && S.trig.mode==="auto"){ warn=true; msg="Free-running (Auto): the trace drifts. Set Trigger Level inside the signal to freeze it."; }
+  else {
+    const cyc = (S.trig.src===0?st1:st2).ncyc;
+    if(cyc>16){ msg="Lots of cycles on screen — increase Time/div... wait, decrease it (smaller time/div = fewer, wider cycles)."; }
+    else if(cyc<1){ msg="Less than one cycle shown — increase Time/div to see the full wave."; }
+    else { msg="Locked & stable. Read Vpp = wave height (divisions) × Volts/div. Try probing another node in the schematic."; }
+  }
+  tx.textContent=msg; el.classList.toggle("warn",warn);
+}
+
+/* ============================ CONTROLS =================================== */
+function fillSelect(sel,arr,fmt,val){ sel.innerHTML=arr.map(v=>`<option value="${v}" ${v===val?"selected":""}>${fmt(v)}</option>`).join(""); }
+function syncCh2Node(){ const s=document.getElementById("ch2node"); if(s) s.value=S.ch2.node; reflectLink(); }
+
+function initControls(){
+  // signal injector (function generator)
+  seg("sigwf","wf",v=>{ P.wf=v; reflectLink(); postSignal({wf:v}); });
+  const sf=document.getElementById("sigfreq"), sa=document.getElementById("sigamp");
+  sf.oninput=()=>{ P.freq=+sf.value; document.getElementById("sigfreqv").textContent=P.freq+" Hz"; reflectLink(); postSignal({freq:P.freq}); };
+  sa.oninput=()=>{ P.amp=+sa.value;  document.getElementById("sigampv").textContent=P.amp+"%"; postSignal({amp:P.amp}); };
+  reflectSignalControls();
+
+  fillSelect(document.getElementById("ch1vdiv"),VDIV,fmtV,S.ch1.vdiv);
+  fillSelect(document.getElementById("ch2vdiv"),VDIV,fmtV,S.ch2.vdiv);
+  fillSelect(document.getElementById("tdiv"),TDIV,fmtT,S.tdiv);
+  const nodeSel=document.getElementById("ch2node");
+  nodeSel.innerHTML=TSDSP.NODES.map(n=>`<option value="${n}">${TSDSP.NODE_LABEL[n]}</option>`).join("");
+  nodeSel.value=S.ch2.node;
+
+  document.getElementById("ch1vdiv").onchange=e=>S.ch1.vdiv=+e.target.value;
+  document.getElementById("ch2vdiv").onchange=e=>S.ch2.vdiv=+e.target.value;
+  document.getElementById("tdiv").onchange=e=>S.tdiv=+e.target.value;
+  nodeSel.onchange=e=>{ S.ch2.node=e.target.value; reflectLink(); };
+
+  bindPos("ch1pos","ch1posv",S.ch1); bindPos("ch2pos","ch2posv",S.ch2);
+  const tl=document.getElementById("triglvl");
+  tl.oninput=()=>{ S.trig.level=+tl.value; document.getElementById("triglvlv").textContent=S.trig.level.toFixed(2)+" V"; };
+
+  seg("ch1coup","c",v=>S.ch1.coup=v);
+  seg("ch2coup","c",v=>S.ch2.coup=v);
+  seg("trigsrc","s",v=>S.trig.src=+v);
+  seg("trigedge","e",v=>S.trig.edge=+v);
+  seg("trigmode","m",v=>S.trig.mode=v);
+
+  chtog("ch1on",S.ch1); chtog("ch2on",S.ch2);
+
+  document.getElementById("autoset").onclick=autoSet;
+  const drawer=document.getElementById("lessons"), scrim=document.getElementById("scrim");
+  const toggle=(o)=>{ drawer.classList.toggle("open",o); scrim.classList.toggle("on",o); document.getElementById("lessonbtn").classList.toggle("on",o); };
+  document.getElementById("lessonbtn").onclick=()=>toggle(!drawer.classList.contains("open"));
+  document.getElementById("lessonclose").onclick=()=>toggle(false);
+  scrim.onclick=()=>toggle(false);
+}
+function bindPos(id,vid,c){ const r=document.getElementById(id); r.oninput=()=>{ c.pos=+r.value; document.getElementById(vid).textContent=c.pos.toFixed(1); }; }
+function seg(id,attr,cb){ const box=document.getElementById(id); box.querySelectorAll(".o").forEach(o=>o.onclick=()=>{
+  box.querySelectorAll(".o").forEach(x=>x.classList.remove("on")); o.classList.add("on"); cb(o.getAttribute("data-"+attr)); }); }
+function chtog(id,c){ const b=document.getElementById(id); b.onclick=()=>{ c.on=!c.on; b.classList.toggle("on",c.on); b.textContent=c.on?"ON":"OFF";
+  b.style.background=c.on?(id==="ch1on"?"var(--ch1)":"var(--ch2)"):"transparent"; b.style.color=c.on?"#04140b":"var(--faint)"; }; }
+
+// Auto-set: pick sensible V/div & time/div to frame the signals (like a real scope's AUTO button)
+function autoSet(){
+  const Wpx=Math.max(200,cv.width), tdiv=S.tdiv, dt=(DIV_X*tdiv)/Wpx;
+  // time/div for ~2.5 cycles
+  const targetTwin=2.5/P.freq; let best=TDIV[0], bd=1e9;
+  TDIV.forEach(t=>{ const d=Math.abs(DIV_X*t-targetTwin); if(d<bd){bd=d;best=t;} });
+  S.tdiv=best; document.getElementById("tdiv").value=best;
+  // vdiv per channel from peak (use a quick compute)
+  const ch=TSDSP.compute(P, 4096, (3/P.freq)/4096, 0);
+  const pick=(arr)=>{ let mx=0; for(let i=1024;i<4096;i++)mx=Math.max(mx,Math.abs(arr[i])); const want=mx/3;
+    let b=VDIV[0]; VDIV.forEach(v=>{ if(v<=want)b=v; }); if(mx>VDIV[VDIV.length-1]*4)b=VDIV[VDIV.length-1]; return Math.max(b,VDIV.find(v=>v>=mx/3.5)||b); };
+  S.ch1.vdiv=nearestVdiv(peakOf(ch.in)); document.getElementById("ch1vdiv").value=S.ch1.vdiv;
+  S.ch2.vdiv=nearestVdiv(peakOf(nodeArr(ch,S.ch2.node))); document.getElementById("ch2vdiv").value=S.ch2.vdiv;
+  S.trig.level=0; document.getElementById("triglvl").value=0; document.getElementById("triglvlv").textContent="0.00 V";
+  S.ch1.pos=0;S.ch2.pos=0; document.getElementById("ch1pos").value=0;document.getElementById("ch2pos").value=0;
+  document.getElementById("ch1posv").textContent="0.0";document.getElementById("ch2posv").textContent="0.0";
+  flash(document.getElementById("grp-horiz")); flash(document.getElementById("grp-ch2"));
+}
+function peakOf(arr){ let mx=0; for(let i=Math.floor(arr.length/3);i<arr.length;i++)mx=Math.max(mx,Math.abs(arr[i])); return mx; }
+function nearestVdiv(peak){ const want=peak/3; let b=VDIV[0]; for(const v of VDIV){ if(v>=want){b=v;break;} b=v; } return b; }
+function flash(el){ el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),700); }
+
+/* ============================ LESSONS =================================== */
+const LESSONS=[
+  {q:"What am I looking at?", a:`The green grid is the <b>graticule</b>: the horizontal axis is <b>time</b>, the vertical axis is <b>voltage</b>. It's divided into <b>${DIV_X}×${DIV_Y} divisions</b>. Every setting on this scope is "per division", so you always read the screen by counting divisions and multiplying.`},
+  {q:"Volts/div — reading amplitude", a:`Each vertical division equals the channel's <code>Volts/div</code>. If a wave is <b>4 divisions</b> tall peak-to-peak at <code>100mV/div</code>, that's <b>400&nbsp;mV Vpp</b>. If a signal is too big and clips off the top, turn Volts/div to a <b>bigger</b> value to zoom out vertically.`, act:()=>flash(document.getElementById("grp-ch2"))},
+  {q:"Time/div — reading frequency", a:`Each horizontal division equals <code>Time/div</code>. A 220&nbsp;Hz note has a period of ~4.5&nbsp;ms, so at <code>1ms/div</code> one cycle spans ~4.5 divisions — you'll see about 2 cycles. One period across <b>N divisions</b> → frequency = 1 / (N × time/div).`, act:()=>flash(document.getElementById("grp-horiz"))},
+  {q:"Triggering — why the wave stands still", a:`The scope sweeps left-to-right over and over. <b>Triggering</b> starts every sweep at the same point on the wave so they stack up and the trace looks frozen. Set the <code>Trigger Level</code> somewhere <b>inside</b> the waveform and pick a <b>rising ↑</b> or <b>falling ↓</b> edge. <b>Auto</b> free-runs if it can't find an edge; <b>Normal</b> only draws when it does — great for catching one-shot events.`, act:()=>flash(document.getElementById("grp-trig"))},
+  {q:"AC vs DC vs GND coupling", a:`<b>DC</b> shows the true voltage including any DC offset — use it to check the pedal's <b>4.5&nbsp;V Vref bias</b>. <b>AC</b> blocks DC so a small wave riding on a big bias sits centered and easy to read. <b>GND</b> disconnects the input and shows where 0&nbsp;V is (the ground reference line) — handy for setting position.`, act:()=>flash(document.getElementById("grp-ch1"))},
+  {q:"Two channels — comparing in vs out", a:`CH1 is the injected <b>Input</b>; CH2 is your <b>probe</b> on the schematic. Watching them together shows exactly what a stage does: the <b>Gain C2/C1</b> readout divides CH2 Vpp by CH1 Vpp so you can literally measure the stage's gain, and you can watch the peaks <b>flatten</b> as the clipping diodes kick in.`},
+  {q:"Debugging the Tube Screamer", a:`A real workflow: probe <b>Input</b> (clean), then <b>After input buffer</b> (same size — a buffer has unity gain), then <b>Op-amp output</b> (bigger and clipped — that's the overdrive), then <b>Output</b> (tone-shaped and set by Level). If a stage's wave looks wrong or dead, you've found where the signal breaks. Hit <b>Auto-set</b> any time to reframe.`, act:autoSet},
+];
+function buildLessons(){
+  document.getElementById("lessonlist").innerHTML = LESSONS.map((l,i)=>
+    `<div class="lesson" data-i="${i}"><div class="q"><span class="n">${i+1}</span>${l.q}</div>
+      <div class="a">${l.a}${l.act?`<br><button class="try" data-try="${i}">Show me ▸</button>`:""}</div></div>`).join("");
+  document.querySelectorAll(".lesson .q").forEach(q=>q.onclick=()=>q.parentElement.classList.toggle("open"));
+  document.querySelectorAll(".lesson .try").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const l=LESSONS[+b.getAttribute("data-try")]; if(l.act)l.act(); });
+}
+
+/* ============================ BOOT ===================================== */
+initControls(); buildLessons(); reflectLink(); fit();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
