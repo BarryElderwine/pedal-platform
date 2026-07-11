@@ -13,6 +13,9 @@ While the project is pre-1.0, minor version bumps may include breaking changes.
   core), the pedal-as-data architecture, the Pedal Build Package plan (schematic export,
   board layout, BOM, build instructions), phased milestones, and the Tube Screamer
   refinement backlog.
+- `ROADMAP.md` — **digital realization** section: emit the signal-graph IR to an FPGA
+  (HDL) or DSP/MCU (C) backend as a "digital build" track alongside the analog Build
+  Package, with the JS model as the golden reference for HDL verification.
 
 ## [0.1.1] - 2026-07-11
 

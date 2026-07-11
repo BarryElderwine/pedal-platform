@@ -35,6 +35,10 @@ The one architectural bet that makes everything else possible: a pedal is a **ne
 Today the TS schematic and model are hardcoded. Turning them into a netlist +
 projections is the **platform refactor** — the true "next" before the catalog scales.
 
+The DSP model is itself a *graph of primitives*, which means it can also be **emitted** to
+other targets — HDL for an FPGA, C for a DSP/MCU — not just run in the browser. That makes
+a **digital realization** a natural sibling of the (analog) Build Package; see below.
+
 ---
 
 ## The catalog (tagged by engine)
@@ -92,6 +96,47 @@ refactor — a strong early proof that pedal-as-data pays off). #3 and #4, and e
 
 ---
 
+## Digital realization — FPGA / DSP backends (code-gen)
+
+Alongside the *analog* Build Package (real components), the same design can target
+*silicon*: generate a digital implementation of the pedal's DSP model. Two flavors, very
+different in difficulty:
+
+- **Behavioral-model → HDL (feasible, high-value).** Emit the signal chain we already
+  simulate as a fixed-point, sample-synchronous pipeline in Verilog/VHDL wired to an audio
+  codec. The primitives map straight onto FPGA fabric: IIR/one-pole filters → DSP-slice
+  MACs, soft-clip / diode curves → LUT or piecewise-poly, delay lines (Core B) → block RAM,
+  LFO → phase accumulator + LUT, knobs → parameter registers. FPGAs are ideal for this
+  (parallel, low-latency streaming DSP).
+- **Real-time analog solving → HDL (research-grade).** Solve the circuit equations in
+  hardware (Wave Digital Filters / nonlinear state-space). Doable for diode clippers and
+  tone stacks, but the TS's nonlinear op-amp+diode *feedback* needs iterative solving — the
+  "true analog fidelity" path, tied to the SPICE-accurate question. Much larger lift.
+
+It's a **compiler-backend pattern**: once the signal chain is data (an IR), emit it to
+several targets from one source —
+
+```
+signal graph (IR) ─► JS backend    (in-browser sim — have it)
+                 ├─► HDL backend   (Verilog/VHDL, FPGA)
+                 └─► C/DSP backend  (MCU/DSP firmware — later)
+```
+
+**The package would ship:** generated HDL for the chain, a top-level with an I2S/codec
+audio interface + parameter registers, computed fixed-point coefficients + word-width
+choices, a target-board note, a resource estimate (LUT/DSP/BRAM), and a **testbench that
+plays a WAV through the HDL and diffs it against the JS model** — the sim as golden
+reference verifying the hardware.
+
+**Caveats:** it's a *digital emulation* (not a literal analog reproduction); fixed-point
+scaling / quantization + IIR stability is where the real engineering lives; nonlinearities
+become LUT/poly approximations; synthesis uses vendor tools (Vivado/Quartus) outside the
+app (we emit HDL + project files). Gated on the signal-graph IR (from the platform refactor)
+plus a validated audio-rate model — a later/stretch output, but a clean and compelling one.
+
+So a finished design has **two realization tracks** from the same source: an **analog build**
+(real components — schematic/PCB/BOM/instructions) and a **digital build** (FPGA/DSP code).
+
 ## The bench grows with the catalog
 
 A static scope trace teaches gain/clipping well, but modulation and delay are about
@@ -121,6 +166,8 @@ A static scope trace teaches gain/clipping well, but modulation and delay are ab
   build instructions; KiCad netlist export).
 - **v0.5.0 — Filter / wah + envelope**, then the **octave / ring-mod** pitch batch;
   decide on an optional digital-pitch module.
+- **Stretch — Digital realization.** HDL/DSP code-gen backend off the signal-graph IR
+  (FPGA behavioral-model target first), with the JS model as the verification reference.
 
 Rationale: land the netlist refactor and a spare overdrive or two *before* Core B, so the
 hardest engine is built on a proven foundation — not at the same time as the abstraction.
@@ -158,5 +205,9 @@ hardest engine is built on a proven foundation — not at the same time as the a
 - **Digital pitch**: include a clearly-labeled digital module (Whammy/harmonizer), or keep
   the catalog strictly analog and stop at octave/ring-mod?
 - **PCB**: KiCad-netlist export only, or attempt an in-app stripboard→PCB step later?
-- **Audio engine**: Web Audio graph vs. reusing the JS DSP model at audio rate.
+- **Audio engine**: Web Audio graph vs. reusing the JS DSP model at audio rate. (A clean
+  audio-rate signal graph is also the prerequisite for the FPGA/DSP code-gen backend.)
+- **FPGA / DSP codegen**: fixed-point word widths + nonlinearity approximation (LUT vs
+  poly); and whether to pursue the Wave-Digital-Filter "true analog" path vs. shipping the
+  behavioral model to HDL.
 - **Reverb**: how faithfully to model spring/plate vs. a tasteful approximation.
